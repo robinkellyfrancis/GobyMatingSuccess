@@ -1,0 +1,587 @@
+---
+title: "Rcode: Characteristics of breeding habitat, genetic mating system, and determinants of mating success in the sponge-dwelling goby Elacatinus lori"
+author: "Robin Francis"
+date: "January 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##datasheet set up
+```{r}
+
+#Breeding Habitat Data 
+
+Sponge_size_GROUP_20200311 <- read.csv("C:/Users/robin/Documents/RESEARCH/PAPERS/Determinants of Reproductive Success/MatingSuccess.Rscripts/elori/goby/Sponge_size_GROUP_20200311.csv", na.strings="")
+group.data<-Sponge_size_GROUP_20200311
+summary(group.data)
+
+#Mating Success Data
+
+datasheet_monthlyAVG_n85 <- read.csv("C:/Users/robin/Documents/RESEARCH/PAPERS/Determinants of Reproductive Success/MatingSuccess.Rscripts/elori/goby/datasheet_monthlyAVG_n85.csv", na.strings="")
+data3<-datasheet_monthlyAVG_n85
+data3$Month<-as.factor(data3$Month)
+str(data3) 
+summary(data3)
+
+#for multiple linear regressions (missing some mesurements):
+
+ds3<-na.omit(data3)
+summary(ds3)
+
+#Attach packages
+
+library(lme4)
+citation("lme4")
+library(nlme)
+library(lmerTest)
+library(MuMIn)
+library(sjstats)
+library(ggplot2)
+library(dplyr)
+library(performance)
+library(see)
+```
+
+##Summary of Sponge Size by Residency Category
+```{r}
+
+table(group.data$Group)
+prop.table(table(group.data$Group))
+
+summary(group.data$Tube_Length)
+parameters::standard_error(group.data$Tube_Length)
+
+summary(group.data$Tube_Length[group.data$Group=="Unoccupied"])
+parameters::standard_error(group.data$Tube_Length[group.data$Group=="Unoccupied"])
+
+summary(group.data$Tube_Length[group.data$Group=="Resident"])
+parameters::standard_error(group.data$Tube_Length[group.data$Group=="Resident"])
+
+summary(group.data$Tube_Length[group.data$Group=="Male"])
+parameters::standard_error(group.data$Tube_Length[group.data$Group=="Male"])
+```
+
+##ANOVA of Sponge Size by Residency Category
+```{r}
+
+summary(aov(group.data$Tube_Length~group.data$Group))
+
+#or:
+group.model<-lm(group.data$Tube_Length~group.data$Group)
+group.model.aov<-aov(group.model)
+summary(group.model.aov)
+group.tukey.test <- TukeyHSD(group.model.aov)
+group.tukey.test
+
+#once the t-statistic is above about 30, the p-value maxes out at 2.62e-14
+
+plot(group.tukey.test)
+```
+
+##Male Size and Sponge Size 
+```{r}
+
+summary(data3$Male_StandardLength_mm)
+parameters::standard_error(data3$Male_StandardLength_mm)
+hist(data3$Male_StandardLength_mm)
+shapiro.test(data3$Male_StandardLength_mm)
+#normal dist
+
+summary(data3$Longest_Length_cm)
+parameters::standard_error(data3$Longest_Length_cm)
+hist(data3$Longest_Length_cm)
+shapiro.test(data3$Longest_Length_cm)
+#normal dist
+
+#lm of male size ~ sponge size
+
+summary(ds3$Male_StandardLength_mm)
+parameters::standard_error(ds3$Male_StandardLength_mm)
+
+summary(ds3$Longest_Length_cm)
+parameters::standard_error(ds3$Longest_Length_cm)
+  
+male_sponge<-lm(ds3$Male_StandardLength_mm~ds3$Longest_Length_cm)
+
+summary(male_sponge)
+
+confint(male_sponge)
+performance::r2(male_sponge)
+check_autocorrelation(male_sponge)
+#ok
+```
+
+##Figure 2, Panel a; Frequency of Sponge Sizes by Cat
+```{r}
+
+#Breeding Habitat: Sponge Size and Residency Status 
+
+#histograms by residency cat in order to put mult hist on one axis
+#NOTE: this plot is NOT stacked, bars are overlayed on top of one another
+
+par(mar=c(5,5,1,1), bty="l")
+
+all.groups_5cm<-hist(group.data$Tube_Length,breaks=seq(1,100,5), bty="l", plot = FALSE)
+group.resident<-subset(group.data$Tube_Length, group.data$Group=="Resident")
+group.resident_5cm<-hist(group.resident,breaks=seq(1,100,5), bty="l", plot=FALSE)
+group.male<-subset(group.data$Tube_Length, group.data$Group=="Male")
+group.male_5cm<-hist(group.male,breaks=seq(1,100,5), bty="l", plot=FALSE)
+
+#This is an r plot, could not get the ggplot to look how I wanted, but I tried below
+
+
+plot(all.groups_5cm,
+     bty="l",
+     xlim=c(0,100), 
+     ylim=c(0,300),
+     col = "white",
+     main ="", 
+     xlab = "Sponge Tube Length (cm)",
+     ylab = "Frequency", 
+     cex.lab=1.6, 
+     cex.axis=1.3)
+plot(group.resident_5cm, bty="l", col = "lightgrey", add = TRUE)
+plot(group.male_5cm, bty="l", col = "#666666", add = TRUE)
+legend("topright",
+       legend=c("Unoccupied", "Occupied by Resident", "Occupied by Breeding Male"), 
+       fill=c("white", "lightgrey", "#666666"), 
+       cex=1.5)
+```
+
+##Figure 2 Panel b; Linear Reg Plot of Male Size and Sponge Size
+```{r}
+
+par(mar=c(5,5,1,1))
+par(bty="n") #this code did not fix
+# the panel border/ type of axis (does not match panel a)
+
+ggplot(ds3, aes(Longest_Length_cm, Male_StandardLength_mm))+
+  geom_point(shape= 21, color="black", fill="black", size = 1.5)+
+  theme_classic()+
+  theme(axis.title = element_text(size = 20), 
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.title.y = element_text(margin = margin(t =20, r = 20)),
+        axis.text = element_text(size = 18),
+        axis.text.x = element_text(colour="black"),
+        axis.text.y = element_text(colour="black"))+
+  geom_smooth(method="lm", color="black")+
+  scale_x_continuous(limits=c(0,100), breaks=c(0,20,40,60,80,100))+
+  xlab("Sponge Tube Length (cm)")+
+  ylab("Male Standard Length (mm)")
+```
+
+##Analyses, Number of Days Paired with a Female 
+```{r}
+#DAYS PAIRED
+
+summary(ds3$Avg_DaysPaired)
+parameters::standard_error(ds3$Avg_DaysPaired)
+table(ds3$Avg_DaysPaired)
+
+
+#clearly right-skewed, should be transformed 
+hist(data3$Avg_DaysPaired)
+shapiro.test(data3$Avg_DaysPaired)
+#not normal
+
+#Log transform 
+data3$Log_days<-log(1+data3$Avg_DaysPaired)
+ds3$Log_days<-log(1+ds3$Avg_DaysPaired)
+hist(data3$Log_days) #looks better? but still not normal
+shapiro.test(data3$Log_days) #still not normal
+
+
+#DAYS PAIRED (LOG TRANSFORMED) MODEL SELECTION
+
+DPL_m1<-lm(Log_days~Male_StandardLength_mm*Longest_Length_cm, data=ds3) 
+DPL_m2<-lm(Log_days~Male_StandardLength_mm+Longest_Length_cm, data=ds3)
+DPL_m3<-lm(Log_days~Male_StandardLength_mm, data=ds3)
+DPL_m4<-lm(Log_days~Longest_Length_cm, data=ds3)
+DPL_mNULL<-lm(Log_days~1, data=ds3)
+
+AIC(DPL_m1,DPL_m2,DPL_m3,DPL_m4, DPL_mNULL)
+#Lowest = 253 = DPL_m3 or DP ~ Male Size
+#within 2 of next lowest AIC so we have to compare models
+
+#smallest model goes first
+anova(DPL_m3, DPL_m1)
+# m1 is not significantly different from m3
+# we chose the simplest model 
+
+#smallest model goes first
+anova(DPL_m3, DPL_m2)
+# m2 is not significantly different from m3
+# we chose the simplest model
+
+anova(DPL_m3, DPL_mNULL)
+#m3 is sig diff from null 
+
+### m3 or DP ~ Male Size is the best model 
+
+summary(DPL_m3)
+#Male size has a positive effect (for every 1mm in length, male are paired 0.06 more days)
+
+plot(DPL_m3) 
+#they look ok
+qqplot(ds3$Log_days, ds3$Male_StandardLength_mm)
+#looks ok
+confint(DPL_m3)
+#CI does not cross zero= 95% of the time, 1 mm of male length will have an effect of 0.03-0.09 days paired 
+performance::r2(DPL_m3)
+#male size expalins 13% of the variation we see in days paired 
+check_autocorrelation(DPL_m3)
+#ok 
+check_model(DPL_m3) 
+#looks okay except for normality of residuals 
+```
+
+##Figure 3, Days Paired
+```{r}
+par(mar=c(5,5,1,1))
+
+DaysPaired<-ggplot(ds3, aes(Male_StandardLength_mm, Log_days))+
+  geom_point(shape= 21, color="black", fill="black", size = 1.5)+
+  theme_classic()+
+  theme(axis.title = element_text(size = 20), 
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.title.y = element_text(margin = margin(t =20, r = 20)),
+        axis.text = element_text(size = 18),
+        axis.text.x = element_text(colour="black"),
+        axis.text.y = element_text(colour="black"))+
+  geom_smooth(method="lm", 
+              color="black")+
+  scale_x_continuous(breaks=c(25,30,35,40,45,50,55  ))+
+  xlab("Male Standard Length (mm)")+
+  ylab(expression(atop("Log Number of Days", paste("Paired with a Female"))))
+
+DaysPaired
+```
+
+##Days Paired correlation with other metrics of success
+```{r}
+
+#Make a correlation matrix
+library("Hmisc")
+
+#need to transform Number of Lays 
+
+#TOTAL LAYS
+
+summary(data3$Avg_TotalLays)
+parameters::standard_error(data3$Avg_TotalLays)
+hist(data3$Avg_TotalLays)
+shapiro.test(data3$Avg_DaysPaired)
+#not normal
+
+#Log transform 
+data3$Log_Lays<-log(data3$Avg_TotalLays)
+ds3$Log_Lays<-log(ds3$Avg_TotalLays)
+hist(data3$Log_Lays) #looks better
+shapiro.test(data3$Log_Lays) #still not normal, but better
+
+#with data transformations:
+dataDP<-select(ds3, Log_days, Log_Lays, Avg_Clutch_Size, Avg_Clutch_Hatch, Avg_Output)
+dataDP.cor<-rcorr(as.matrix(dataDP))
+dataDP.cor
+
+#inputing results into a table in Word doc for Table 1
+```
+
+##Number of Clutches 
+```{r}
+#TOTAL LAYS
+
+summary(data3$Avg_TotalLays)
+parameters::standard_error(data3$Avg_TotalLays)
+hist(data3$Avg_TotalLays)
+shapiro.test(data3$Avg_DaysPaired)
+#not normal
+
+#so we log transformed it to do model selection 
+
+#Log transform 
+data3$Log_Lays<-log(1+data3$Avg_TotalLays)
+ds3$Log_Lays<-log(1+ds3$Avg_TotalLays)
+hist(data3$Log_Lays) #looks better
+shapiro.test(data3$Log_Lays) #normal
+
+#"TLL_m" = "Total Lays Log-transformed Model..."
+
+TLL_m1<-lm(Log_Lays~Male_StandardLength_mm*Longest_Length_cm, data=ds3) 
+TLL_m2<-lm(Log_Lays~Male_StandardLength_mm+Longest_Length_cm, data=ds3)
+TLL_m3<-lm(Log_Lays~Male_StandardLength_mm, data=ds3)
+TLL_m4<-lm(Log_Lays~Longest_Length_cm, data=ds3)
+TLL_mNULL<-lm(Log_Lays~1, data=ds3)
+
+AIC(TLL_m1,TLL_m2,TLL_m3,TLL_m4, TLL_mNULL)
+
+#Lowest AIC 92, m2
+#but with 2 so we need to compare
+
+#smallest model goes first
+anova(TLL_m2, TLL_m1)
+#m1 not sig diff from m2
+#we choose the simpler model 
+
+
+summary(TLL_m2)
+#both male size and sponge size are sig 
+
+### m2 or TLL ~ Male Size AND Sponge Size is the best model 
+
+plot(TLL_m2) 
+#they look okay?
+confint(TLL_m2)
+#CI, 95% conf that 1mm in male size increases total lays by 0.002-0.03
+#CI crosses zero for sponge= NOT sig
+performance::r2(TLL_m2)
+#male and sponge size explains 8% of the variation in total lays
+check_autocorrelation(TLL_m2)
+#ok 
+check_model(TLL_m2) 
+#looks ok
+
+```
+
+##Figure 4; Number of clutches
+```{r}
+#to plot multiple variable models: 
+
+#load car package
+library(car)
+
+#Reminder: TLL_m2<-lm(Log_Lays~Male_StandardLength_mm+Longest_Length_cm, data=ds3)
+
+#produce added variable plots
+avPlots(TLL_m2)
+#NOT FINAL PLOT (see below)
+
+#Here is how to interpret each plot:
+
+#The x-axis displays a single predictor variable, 
+  #and the y-axis displays the response variable.
+#The blue line shows the association between the predictor variable and the response variable, 
+  #while holding the value of all other predictor variables constant.
+
+#The points that are labelled in each plot represent the 2 observations with the largest residuals, 
+  #and the 2 observations with the largest partial leverage.
+
+```
+
+##Function to customize Figure 4 
+```{r}
+
+#code to make function "AvPlots2" just so that I can change xlabs:
+
+avPlots2 <- function(model, terms=~., intercept=FALSE, layout=NULL, ask, 
+                     main, xlab, ...){
+    terms <- if(is.character(terms)) paste("~",terms) else terms
+    vform <- update(formula(model),terms)
+    if(any(is.na(match(all.vars(vform), all.vars(formula(model))))))
+        stop("Only predictors in the formula can be plotted.")
+    terms.model <- attr(attr(model.frame(model), "terms"), "term.labels")
+    terms.vform <- attr(terms(vform), "term.labels")
+    terms.used <- match(terms.vform, terms.model)
+    mm <- model.matrix(model) 
+    model.names <- attributes(mm)$dimnames[[2]]
+    model.assign <- attributes(mm)$assign
+    good <- model.names[!is.na(match(model.assign, terms.used))]
+    if (intercept) good <- c("(Intercept)", good)
+    nt <- length(good)
+    if (nt == 0) stop("No plots specified")
+    if (missing(main)) main <- if (nt == 1) paste("Added-Variable Plot:", good) else "Added-Variable Plots"
+    if (nt == 0) stop("No plots specified")
+    if (nt > 1 & (is.null(layout) || is.numeric(layout))) {
+        if(is.null(layout)){
+            layout <- switch(min(nt, 9), c(1, 1), c(1, 2), c(2, 2), c(2, 2), 
+                             c(3, 2), c(3, 2), c(3, 3), c(3, 3), c(3, 3))
+        }
+        ask <- if(missing(ask) || is.null(ask)) prod(layout)<nt else ask
+        op <- par(mfrow=layout, ask=ask, no.readonly=TRUE, 
+                  oma=c(0, 0, 1.5, 0), mar=c(5, 4, 1, 2) + .1)
+        on.exit(par(op))
+    }
+    if (missing(xlab)) xlab <- paste(good, "| others")
+    if (length(xlab) == 1L) xlab <- rep(xlab, length(good))
+    if (length(xlab) > length(good))
+      warning("'xlab' not length 1 or the number of model names, truncating")
+    res <- as.list(NULL)
+    for (i in seq_along(good)) {
+      term <- good[[i]]
+      res[[term]] <- avPlot(model, term, main="", xlab=xlab[[i]], ...)
+    }
+    mtext(side=3,outer=TRUE,main, cex=1.2)
+    invisible(res)
+}
+```
+
+##Customizing avPlot ; Using this for Figure 4
+```{r}
+
+avPlots2(TLL_m2, 
+        id=FALSE, 
+        col = "black", 
+        col.lines = "black", 
+        pch = 20, 
+        lwd = 2, 
+        cex = 1, 
+        cex.lab = 1.5, 
+        cex.axis = 1.5, 
+        xlab =c('Male Standard Length (mm)', 'Sponge Tube Length (cm)'),
+        ylab = 'Log Number of Clutches',
+        main =" ",
+        grid=FALSE,
+        ellipse=FALSE,
+        marginal.scale=FALSE)
+
+
+```
+
+##Size of Clutches 
+```{r}
+
+hist(data3$Avg_Clutch_Size)
+summary(data3$Avg_Clutch_Size)
+parameters::standard_error(data3$Avg_Clutch_Size)
+table(data3$Avg_Clutch_Size)
+shapiro.test(data3$Avg_Clutch_Size)
+#normal
+
+#"CS_m" = "Clutch Size Model"
+#dataset is the "ds3" (missing values removed) so models are fitted to the same number of observations
+
+CS_m1<-lm(Avg_Clutch_Size~Male_StandardLength_mm*Longest_Length_cm, data=ds3) 
+CS_m2<-lm(Avg_Clutch_Size~Male_StandardLength_mm+Longest_Length_cm,  data=ds3)
+CS_m3<-lm(Avg_Clutch_Size~Male_StandardLength_mm,  data=ds3)
+CS_m4<-lm(Avg_Clutch_Size~Longest_Length_cm,  data=ds3)
+CS_mNULL<-lm(Avg_Clutch_Size~1,  data=ds3)
+
+AIC(CS_m1,CS_m2,CS_m3,CS_m4, CS_mNULL)
+#Lowest AIC is the NULL model 
+```
+
+##Outcome of Clutches 
+```{r}
+
+summary(ds3$Avg_Clutch_Hatch)
+parameters::standard_error(ds3$Avg_Clutch_Hatch)
+table(ds3$Avg_Clutch_Hatch)
+
+summary(data3$Avg_Clutch_Hatch)
+parameters::standard_error(data3$Avg_Clutch_Hatch)
+hist(data3$Avg_Clutch_Hatch)
+shapiro.test(data3$Avg_Clutch_Hatch)
+ 
+#use GLM with quasi-binomial error distr
+
+#"CO_m" = "Clutch Outcome Model..."
+
+CO_m1<-glm(Avg_Clutch_Hatch~Male_StandardLength_mm*Longest_Length_cm, family="quasibinomial", data=ds3) 
+CO_m2<-glm(Avg_Clutch_Hatch~Male_StandardLength_mm+Longest_Length_cm, family="quasibinomial", data=ds3)
+CO_m3<-glm(Avg_Clutch_Hatch~Male_StandardLength_mm, family="quasibinomial", data=ds3)
+CO_m4<-glm(Avg_Clutch_Hatch~Longest_Length_cm, family="quasibinomial", data=ds3)
+CO_mNULL<-glm(Avg_Clutch_Hatch~1, family="quasibinomial", data=ds3)
+
+AIC(CO_m1,CO_m2,CO_m3,CO_m4, CO_mNULL)
+
+#will not compute log-lik for quasi models...
+
+#double check models for binomial 
+#will get error for using non-integer binomial... 
+
+CO_m1<-glm(Avg_Clutch_Hatch~Male_StandardLength_mm*Longest_Length_cm, family="binomial", data=ds3) 
+CO_m2<-glm(Avg_Clutch_Hatch~Male_StandardLength_mm+Longest_Length_cm, family="binomial", data=ds3)
+CO_m3<-glm(Avg_Clutch_Hatch~Male_StandardLength_mm, family="binomial", data=ds3)
+CO_m4<-glm(Avg_Clutch_Hatch~Longest_Length_cm, family="binomial", data=ds3)
+CO_mNULL<-glm(Avg_Clutch_Hatch~1, family="binomial", data=ds3)
+
+AIC(CO_m1,CO_m2,CO_m3,CO_m4, CO_mNULL)
+#lowest AIC is null model 
+
+
+#lets try this: (what we say we do in the methods)
+
+CO2_m1<-lm(Avg_Clutch_Hatch~Male_StandardLength_mm*Longest_Length_cm,  data=ds3) 
+CO2_m2<-lm(Avg_Clutch_Hatch~Male_StandardLength_mm+Longest_Length_cm, data=ds3)
+CO2_m3<-lm(Avg_Clutch_Hatch~Male_StandardLength_mm,  data=ds3)
+CO2_m4<-lm(Avg_Clutch_Hatch~Longest_Length_cm, data=ds3)
+CO2_mNULL<-lm(Avg_Clutch_Hatch~1, data=ds3)
+
+AIC(CO2_m1,CO2_m2,CO2_m3,CO2_m4, CO2_mNULL)
+
+#Null is still the best... 
+
+summary(CO2_m3)
+#male size not sig 
+
+summary(CO_m4)
+#sponge size not sig 
+```
+
+##Reproductive Output 
+```{r}
+
+summary(data3$Avg_Output)
+parameters::standard_error(data3$Avg_Output)
+hist(data3$Avg_Output)
+shapiro.test(data3$Avg_Output)
+#normal
+
+#"RO_m" = "Reproductive Output Model..."
+
+RO_m1<-lm(Avg_Output~Male_StandardLength_mm*Longest_Length_cm, data=ds3) 
+RO_m2<-lm(Avg_Output~Male_StandardLength_mm+Longest_Length_cm, data=ds3)
+RO_m3<-lm(Avg_Output~Male_StandardLength_mm, data=ds3)
+RO_m4<-lm(Avg_Output~Longest_Length_cm, data=ds3)
+RO_mNULL<-lm(Avg_Output~1, data=ds3)
+
+AIC(RO_m1,RO_m2,RO_m3,RO_m4, RO_mNULL)
+
+#Lowest AIC 360, m3
+#but with 2 so we need to compare
+
+#smallest model goes first
+anova(RO_m3, RO_m2)
+#m2 not sig diff from m3
+
+summary(RO_m3)
+#male size est = 0.07203 p = 0.0245 * 
+
+plot(RO_m3) 
+#they look okay?
+confint(RO_m3)
+#CI, 95% conf that 1mm in male size increases total lays by 0.009-0.13
+performance::r2(RO_m3)
+#male size explains 5% of the variation in ro
+check_autocorrelation(RO_m3)
+#ok 
+check_model(RO_m3) 
+#looks ok
+```
+
+##Figure 5, Reproductive Output 
+```{r}
+
+DaysPaired<-ggplot(ds3, aes(Male_StandardLength_mm, Avg_Output))+
+  geom_point(shape= 21, color="black", fill="black", size = 1.5)+
+  theme_classic()+
+  theme(plot.margin = margin(2, .1, .1, .1, "cm"),
+        axis.title = element_text(size = 20), 
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.title.y = element_text(margin = margin(t =40, r = 20)),
+        axis.text = element_text(size = 18),
+        axis.text.x = element_text(colour="black"),
+        axis.text.y = element_text(colour="black"))+
+  geom_smooth(method="lm", 
+              color="black")+
+  scale_x_continuous(breaks=c(25,30,35,40,45,50,55  ))+
+  xlab("Male Standard Length (mm)")+
+  ylab("Estimated Reproductive Output")
+
+DaysPaired
+
+```
+
